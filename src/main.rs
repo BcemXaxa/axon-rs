@@ -2,10 +2,8 @@ use std::sync::Arc;
 
 use iced::alignment::Vertical;
 use iced::widget::{button, column, horizontal_space, row, text_editor::Content};
-use iced::widget::{combo_box, container, text, text_editor};
+use iced::widget::{self, combo_box, container, text, text_editor, toggler};
 use iced::{Element, Length, Task, Theme};
-
-use tokio_serial::available_ports;
 
 fn main() -> iced::Result {
     iced::application("There will be a cool program name", update, view)
@@ -16,15 +14,9 @@ fn main() -> iced::Result {
                 theme: Theme::Dark,
 
                 communicator: Content::with_text(""),
-                combo_state: get_ports(),
             };
             (state, Task::none())
         })
-}
-
-fn get_ports() -> combo_box::State<String> {
-    let ports = available_ports().unwrap();
-    combo_box::State::new(ports.into_iter().map(|x| x.port_name).collect())
 }
 
 fn theme_name(theme: &Theme) -> String {
@@ -62,16 +54,14 @@ enum Message {
     PreviousTheme,
     NextTheme,
     Clear,
-    Refresh,
     Move(text_editor::Action),
-    Select(String),
+    Toggled(bool),
 }
 
 struct State {
     theme: Theme,
 
     communicator: Content,
-    combo_state: combo_box::State<String>,
 }
 impl State {
     fn log(&mut self, msg: impl Into<String>) {
@@ -92,51 +82,39 @@ fn update(state: &mut State, message: Message) -> impl Into<Task<Message>> {
     use text_editor::Edit;
     match message {
         M::Clear => {
-            state.communicator.perform(Action::SelectAll);
-            state.communicator.perform(Action::Edit(Edit::Backspace));
-        }
+                        state.communicator.perform(Action::SelectAll);
+                        state.communicator.perform(Action::Edit(Edit::Backspace));
+            }
         M::Move(action) if !action.is_edit() => state.communicator.perform(action),
         M::Move(_) => state.log("You can't edit this"),
-        M::Refresh => {
-            state.log("Devices refreshed");
-            state.combo_state = get_ports()
-        }
-        M::Select(selected) => state.log(format!("Selected {selected}")),
         M::PreviousTheme => {
-            state.theme = Theme::ALL
-                .iter()
-                .cycle()
-                .skip_while(|theme| **theme != state.theme)
-                .skip(1)
-                .next()
-                .unwrap()
-                .clone();
-        }
+                state.theme = Theme::ALL
+                    .iter()
+                    .cycle()
+                    .skip_while(|theme| **theme != state.theme)
+                    .skip(1)
+                    .next()
+                    .unwrap()
+                    .clone();
+            }
         M::NextTheme => {
-            state.theme = Theme::ALL
-                .iter()
-                .rev()
-                .cycle()
-                .skip_while(|theme| **theme != state.theme)
-                .skip(1)
-                .next()
-                .unwrap()
-                .clone();
-        }
+                state.theme = Theme::ALL
+                    .iter()
+                    .rev()
+                    .cycle()
+                    .skip_while(|theme| **theme != state.theme)
+                    .skip(1)
+                    .next()
+                    .unwrap()
+                    .clone();
+            }
     }
 }
 
 fn view(state: &State) -> Element<Message> {
-    let ports = combo_box(
-        &state.combo_state,
-        "Connect a device...",
-        None,
-        Message::Select,
-    );
+    widget::
     let col = column![
         row![
-            button("Refresh").on_press(Message::Refresh),
-            ports,
             horizontal_space(),
             button("Clear log").on_press(Message::Clear)
         ]

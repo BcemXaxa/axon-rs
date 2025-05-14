@@ -5,5 +5,4 @@ edition = "2021"
 
 [dependencies]
 gltf = "1.4.1"
-iced = { version = "0.13.1" }
-tokio-serial = "5.4.5"
+iced = "0.13.1"
