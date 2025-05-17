@@ -1,138 +1,112 @@
-use std::sync::Arc;
+#![windows_subsystem = "windows"]
 
 use iced::alignment::Vertical;
-use iced::widget::{button, column, horizontal_space, row, text_editor::Content};
-use iced::widget::{self, combo_box, container, text, text_editor, toggler};
-use iced::{Element, Length, Task, Theme};
+use iced::widget::container::bordered_box;
+use iced::widget::{
+    self, button, column, container, mouse_area, rich_text, row, text, text_editor, vertical_rule,
+};
+use iced::Alignment::{self, Center};
+use iced::Length::{Fill, Shrink};
+use iced::{application, border, window, Element, Subscription, Task, Theme};
 
 fn main() -> iced::Result {
-    iced::application("There will be a cool program name", update, view)
-        .theme(|state| state.theme.clone())
+    application("Accelerometric modeling", Message::respond, State::view)
+        .theme(State::theme)
+        .subscription(State::subscription)
         .centered()
-        .run_with(|| {
-            let state = State {
-                theme: Theme::Dark,
-
-                communicator: Content::with_text(""),
-            };
-            (state, Task::none())
-        })
+        .antialiasing(true)
+        .run_with(State::new)
 }
-
-fn theme_name(theme: &Theme) -> String {
-    use Theme as T;
-    match theme {
-        T::Light => "Light",
-        T::Dark => "Dark",
-        T::Dracula => "Dracula",
-        T::Nord => "Nord",
-        T::SolarizedLight => "SolarizedLight",
-        T::SolarizedDark => "SolarizedDark",
-        T::GruvboxLight => "GruvboxLight",
-        T::GruvboxDark => "GruvboxDark",
-        T::CatppuccinLatte => "CatppuccinLatte",
-        T::CatppuccinFrappe => "CatppuccinFrappe",
-        T::CatppuccinMacchiato => "CatppuccinMacchiato",
-        T::CatppuccinMocha => "CatppuccinMocha",
-        T::TokyoNight => "TokyoNight",
-        T::TokyoNightStorm => "TokyoNightStorm",
-        T::TokyoNightLight => "TokyoNightLight",
-        T::KanagawaWave => "KanagawaWave",
-        T::KanagawaDragon => "KanagawaDragon",
-        T::KanagawaLotus => "KanagawaLotus",
-        T::Moonfly => "Moonfly",
-        T::Nightfly => "Nightfly",
-        T::Oxocarbon => "Oxocarbon",
-        T::Ferra => "Ferra",
-        T::Custom(_) => "Custom",
-    }
-    .into()
-}
-
-#[derive(Clone, Debug)]
-enum Message {
-    PreviousTheme,
-    NextTheme,
-    Clear,
-    Move(text_editor::Action),
-    Toggled(bool),
-}
-
 struct State {
     theme: Theme,
-
-    communicator: Content,
 }
 impl State {
-    fn log(&mut self, msg: impl Into<String>) {
-        use text_editor::*;
-        self.communicator.perform(Action::Move(Motion::DocumentEnd));
-        if self.communicator.cursor_position().1 != 0 {
-            self.communicator.perform(Action::Edit(Edit::Enter));
+    fn new() -> (State, Task<Message>) {
+        let state = State { theme: Theme::Nord };
+        (state, Task::none())
+    }
+    fn theme(state: &State) -> Theme {
+        state.theme.clone()
+    }
+    fn subscription(&self) -> Subscription<Message> {
+        window::events().map(|(_id, event)| {
+            use window::Event as E;
+            match event {
+                // E::Opened { position, size } => todo!(),
+                // E::Closed => todo!(),
+                // E::Moved(point) => todo!(),
+                // E::Resized(size) => todo!(),
+                // E::RedrawRequested(instant) => todo!(),
+                // E::CloseRequested => todo!(),
+                // E::Focused => todo!(),
+                // E::Unfocused => todo!(),
+                // E::FileHovered(path_buf) => todo!(),
+                // E::FileDropped(path_buf) => todo!(),
+                // E::FilesHoveredLeft => todo!(),
+                _ => (),
+            }
+            Message::None
+        })
+    }
+}
+impl State {
+    fn view(&self) -> impl Into<Element<Message>> {
+        let top = container(
+            row![button("Change theme"), button("Change theme")]
+                .spacing(1)
+                .height(Shrink),
+        )
+        .align_right(Fill)
+        .style(bordered_box);
+        column![
+            top,
+            row![
+                column![
+                    row![
+                        button(text("Text").center()).width(Fill),
+                        button(text("Plot").center()).width(Fill)
+                    ],
+                    self.file_select().into(),
+                ]
+                .height(Fill)
+                .align_x(Center),
+                column![
+                    self.gltf_preview().into(),
+                    container("hello").center(Fill).style(bordered_box)
+                ]
+            ]
+            .spacing(10)
+            .padding(10)
+        ]
+    }
+
+    fn file_select(&self) -> impl Into<Element<Message>> {
+        let file_select = column![
+            text("No file selected!"),
+            text("Drag and drop"),
+            text("or"),
+            button("Explore"),
+        ]
+        .align_x(Center)
+        .spacing(10);
+
+        container(file_select).center(Fill).style(bordered_box)
+    }
+    fn gltf_preview(&self) -> impl Into<Element<Message>> {
+        container(button(text("GLTF preview").width(Fill).center())).width(Fill)
+    }
+}
+
+#[derive(Debug, Clone)]
+enum Message {
+    None,
+}
+impl Message {
+    fn respond(state: &mut State, msg: Self) -> Task<Message> {
+        use Message as M;
+        match msg {
+            M::None => (),
         }
-        self.communicator
-            .perform(Action::Edit(Edit::Paste(Arc::new(msg.into()))));
+        Task::none()
     }
-}
-
-fn update(state: &mut State, message: Message) -> impl Into<Task<Message>> {
-    use Message as M;
-
-    use text_editor::Action;
-    use text_editor::Edit;
-    match message {
-        M::Clear => {
-                        state.communicator.perform(Action::SelectAll);
-                        state.communicator.perform(Action::Edit(Edit::Backspace));
-            }
-        M::Move(action) if !action.is_edit() => state.communicator.perform(action),
-        M::Move(_) => state.log("You can't edit this"),
-        M::PreviousTheme => {
-                state.theme = Theme::ALL
-                    .iter()
-                    .cycle()
-                    .skip_while(|theme| **theme != state.theme)
-                    .skip(1)
-                    .next()
-                    .unwrap()
-                    .clone();
-            }
-        M::NextTheme => {
-                state.theme = Theme::ALL
-                    .iter()
-                    .rev()
-                    .cycle()
-                    .skip_while(|theme| **theme != state.theme)
-                    .skip(1)
-                    .next()
-                    .unwrap()
-                    .clone();
-            }
-    }
-}
-
-fn view(state: &State) -> Element<Message> {
-    widget::
-    let col = column![
-        row![
-            horizontal_space(),
-            button("Clear log").on_press(Message::Clear)
-        ]
-        .spacing(10),
-        text_editor(&state.communicator)
-            .height(Length::Fill)
-            .on_action(Message::Move),
-        row![
-            button("<").on_press(Message::PreviousTheme),
-            button(">").on_press(Message::NextTheme),
-            text(format!("Theme: {}", theme_name(&state.theme)))
-                .align_y(Vertical::Center)
-                .height(Length::Fill),
-        ]
-        .height(Length::Shrink)
-        .spacing(10),
-    ]
-    .spacing(10);
-
-    container(col).padding(10).into()
 }
