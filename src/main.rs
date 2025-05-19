@@ -1,9 +1,11 @@
 #![windows_subsystem = "windows"]
 
 use iced::alignment::Vertical;
+use iced::overlay::menu::Menu;
 use iced::widget::container::bordered_box;
+use iced::widget::tooltip::Position;
 use iced::widget::{
-    self, button, column, container, mouse_area, rich_text, row, text, text_editor, vertical_rule,
+    self, button, column, combo_box, container, mouse_area, pick_list, rich_text, row, text, text_editor, tooltip, vertical_rule, Space
 };
 use iced::Alignment::{self, Center};
 use iced::Length::{Fill, Shrink};
@@ -19,10 +21,14 @@ fn main() -> iced::Result {
 }
 struct State {
     theme: Theme,
+    is_changing: bool,
 }
 impl State {
     fn new() -> (State, Task<Message>) {
-        let state = State { theme: Theme::Nord };
+        let state = State {
+            theme: Theme::Nord,
+            is_changing: false,
+        };
         (state, Task::none())
     }
     fn theme(state: &State) -> Theme {
@@ -51,13 +57,10 @@ impl State {
 }
 impl State {
     fn view(&self) -> impl Into<Element<Message>> {
-        let top = container(
-            row![button("Change theme"), button("Change theme")]
-                .spacing(1)
-                .height(Shrink),
-        )
-        .align_right(Fill)
-        .style(bordered_box);
+        let menu = Menu::new(state, options, hovered_option, on_selected, on_option_hovered, class);
+        let top = container(row![].spacing(1).height(Shrink))
+            .align_right(Fill)
+            .style(bordered_box);
         column![
             top,
             row![
@@ -72,7 +75,7 @@ impl State {
                 .align_x(Center),
                 column![
                     self.gltf_preview().into(),
-                    container("hello").center(Fill).style(bordered_box)
+                    container(Space::new(Shrink, Shrink)).center(Fill).style(bordered_box)
                 ]
             ]
             .spacing(10)
@@ -100,12 +103,14 @@ impl State {
 #[derive(Debug, Clone)]
 enum Message {
     None,
+    ChangeTheme,
 }
 impl Message {
     fn respond(state: &mut State, msg: Self) -> Task<Message> {
         use Message as M;
         match msg {
             M::None => (),
+            M::ChangeTheme => state.is_changing = true,
         }
         Task::none()
     }
