@@ -12,10 +12,8 @@ use iced::{
     Theme,
 };
 
-mod modules;
-
 fn main() -> iced::Result {
-    application("Accelerometric modeling", State::update, State::view)
+    application("Axon", State::update, State::view)
         .theme(State::theme)
         .subscription(State::subscription)
         .centered()
@@ -61,6 +59,7 @@ trait View {
 impl View for State {
     type Message = Message;
     fn view(&self) -> impl Into<Element<Self::Message>> {
+
         column![
             row![
                 column![
