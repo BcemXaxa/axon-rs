@@ -1,18 +1,21 @@
-#![windows_subsystem = "windows"]
+#![cfg_attr(
+    all(target_os = "windows", not(test)),
+    windows_subsystem = "windows"
+)]
 
-use iced::alignment::Vertical;
-use iced::overlay::menu::Menu;
 use iced::widget::container::bordered_box;
-use iced::widget::tooltip::Position;
-use iced::widget::{
-    self, button, column, combo_box, container, mouse_area, pick_list, rich_text, row, text, text_editor, tooltip, vertical_rule, Space
-};
-use iced::Alignment::{self, Center};
+use iced::widget::{button, column, container, row, text, Space};
+use iced::Alignment::Center;
 use iced::Length::{Fill, Shrink};
-use iced::{application, border, window, Element, Subscription, Task, Theme};
+use iced::{
+    application, window, Element, Subscription, Task,
+    Theme,
+};
+
+mod modules;
 
 fn main() -> iced::Result {
-    application("Accelerometric modeling", Message::respond, State::view)
+    application("Accelerometric modeling", State::update, State::view)
         .theme(State::theme)
         .subscription(State::subscription)
         .centered()
@@ -21,14 +24,10 @@ fn main() -> iced::Result {
 }
 struct State {
     theme: Theme,
-    is_changing: bool,
 }
 impl State {
     fn new() -> (State, Task<Message>) {
-        let state = State {
-            theme: Theme::Nord,
-            is_changing: false,
-        };
+        let state = State { theme: Theme::Nord };
         (state, Task::none())
     }
     fn theme(state: &State) -> Theme {
@@ -36,7 +35,7 @@ impl State {
     }
     fn subscription(&self) -> Subscription<Message> {
         window::events().map(|(_id, event)| {
-            use window::Event as E;
+            //use window::Event as E;
             match event {
                 // E::Opened { position, size } => todo!(),
                 // E::Closed => todo!(),
@@ -55,14 +54,14 @@ impl State {
         })
     }
 }
-impl State {
-    fn view(&self) -> impl Into<Element<Message>> {
-        let menu = Menu::new(state, options, hovered_option, on_selected, on_option_hovered, class);
-        let top = container(row![].spacing(1).height(Shrink))
-            .align_right(Fill)
-            .style(bordered_box);
+trait View {
+    type Message;
+    fn view(&self) -> impl Into<Element<Self::Message>>;
+}
+impl View for State {
+    type Message = Message;
+    fn view(&self) -> impl Into<Element<Self::Message>> {
         column![
-            top,
             row![
                 column![
                     row![
@@ -75,14 +74,19 @@ impl State {
                 .align_x(Center),
                 column![
                     self.gltf_preview().into(),
-                    container(Space::new(Shrink, Shrink)).center(Fill).style(bordered_box)
+                    container(Space::new(Shrink, Shrink))
+                        .center(Fill)
+                        .style(bordered_box)
                 ]
             ]
             .spacing(10)
             .padding(10)
         ]
     }
+}
 
+// Elements
+impl State {
     fn file_select(&self) -> impl Into<Element<Message>> {
         let file_select = column![
             text("No file selected!"),
@@ -95,23 +99,27 @@ impl State {
 
         container(file_select).center(Fill).style(bordered_box)
     }
+
     fn gltf_preview(&self) -> impl Into<Element<Message>> {
         container(button(text("GLTF preview").width(Fill).center())).width(Fill)
     }
 }
 
+trait Update {
+    type Message;
+    fn update(&mut self, msg: Self::Message) -> Task<Self::Message>;
+}
+
 #[derive(Debug, Clone)]
 enum Message {
     None,
-    ChangeTheme,
 }
-impl Message {
-    fn respond(state: &mut State, msg: Self) -> Task<Message> {
-        use Message as M;
+impl Update for State {
+    type Message = Message;
+
+    fn update(&mut self, msg: Self::Message) -> Task<Self::Message> {
         match msg {
-            M::None => (),
-            M::ChangeTheme => state.is_changing = true,
+            Message::None => Task::none(),
         }
-        Task::none()
     }
 }
