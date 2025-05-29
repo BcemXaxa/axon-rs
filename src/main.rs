@@ -2,6 +2,7 @@
 // #![allow(unused)]
 
 use std::future::Future;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -85,9 +86,18 @@ impl View for State {
         ]
         .spacing(10);
         let row2 = row![
-            row![button("Open..").on_press(Message::OpenDialog), button("Save"), button("Save as..")]
-                .spacing(10)
-                .width(Fill),
+            row![
+                button("Open..").on_press(Message::DialogOpen),
+                button("Save").on_press_maybe(
+                    self.content
+                        .as_ref()
+                        .map(|(_, path)| Message::SaveFile(path.to_owned()))
+                ),
+                button("Save as..")
+                    .on_press_maybe(self.content.is_some().then_some(Message::DialogSave))
+            ]
+            .spacing(10)
+            .width(Fill),
             container(button("Convert"))
                 .align_x(Horizontal::Center)
                 .width(Fill),
@@ -144,7 +154,7 @@ impl State {
             text("No file selected!"),
             text("Drag and drop"),
             text("or"),
-            button("Explore").on_press(Message::OpenDialog),
+            button("Explore").on_press(Message::DialogOpen),
         ]
         .align_x(Center)
         .spacing(10);
@@ -163,10 +173,17 @@ impl State {
 #[derive(Debug, Clone)]
 enum Message {
     None,
-    OpenDialog,
-    DialogClosed,
+
+    DialogOpen,
+    DialogOpenClosed,
+    DialogSave,
+    DialogSaveClosed,
+
     OpenFile(PathBuf),
     FileOpened(Arc<String>, PathBuf),
+    SaveFile(PathBuf),
+    FileSaved,
+
     OpenTab(LeftTab),
     Edit(text_editor::Action),
 }
@@ -181,17 +198,31 @@ impl Update for State {
     fn update(&mut self, msg: Self::Message) -> Task<Self::Message> {
         use Message as M;
         match msg {
-            M::OpenDialog if !self.dialog => {
+            M::DialogOpen if !self.dialog => {
                 self.dialog = true;
-                return Task::future(file_dialog()).then(|maybe_path| {
+                return Task::future(dialog_open()).then(|maybe_path| {
                     let maybe_open = match maybe_path {
                         Some(path) => Task::done(Message::OpenFile(path)),
                         None => Task::none(),
                     };
-                    Task::done(Message::DialogClosed).chain(maybe_open)
+                    Task::done(Message::DialogOpenClosed).chain(maybe_open) // FIXME for some reason doesn't work
                 });
             }
-            M::DialogClosed => {
+            M::DialogOpenClosed => {
+                self.dialog = false;
+            }
+            M::DialogSave if dbg!(!self.dialog) => {
+                self.dialog = true;
+                return Task::future(dialog_save()).then(|maybe_path| {
+                    dbg!(&maybe_path);
+                    let maybe_save = match maybe_path {
+                        Some(path) => Task::done(Message::SaveFile(path)),
+                        None => Task::none(),
+                    };
+                    Task::done(Message::DialogSaveClosed).chain(maybe_save) // FIXME for some reason doesn't work
+                });
+            }
+            M::DialogSaveClosed => {
                 self.dialog = false;
             }
             M::OpenFile(path) => {
@@ -199,6 +230,19 @@ impl Update for State {
                     match read_file(&path).await.map(Arc::new) {
                         Ok(content) => Message::FileOpened(content, path),
                         Err(_) => Message::None, // FIXME error handling
+                    }
+                });
+            }
+            M::SaveFile(path) if self.content.is_some() => {
+                let content = self
+                    .content
+                    .as_ref()
+                    .map(|(content, _)| content.text())
+                    .unwrap();
+                return Task::future(async move {
+                    match write_file(&path, &content).await {
+                        Err(_) => Message::None, // FIXME error handling
+                        Ok(_) => Message::FileSaved,
                     }
                 });
             }
@@ -217,8 +261,9 @@ impl Update for State {
     }
 }
 
-fn file_dialog() -> impl Future<Output = Option<PathBuf>> {
+fn dialog_open() -> impl Future<Output = Option<PathBuf>> {
     rfd::AsyncFileDialog::new()
+        .set_title("Select motion capture data...")
         .add_filter("", &["amcx"])
         .pick_file()
         .map(|opt| opt.map(|fh| fh.path().to_path_buf()))
@@ -226,4 +271,20 @@ fn file_dialog() -> impl Future<Output = Option<PathBuf>> {
 
 fn read_file(path: &Path) -> impl Future<Output = Result<String, std::io::Error>> + use<'_> {
     tokio::fs::read_to_string(path)
+}
+
+fn dialog_save() -> impl Future<Output = Option<PathBuf>> {
+    rfd::AsyncFileDialog::new()
+        .set_title("Select file to save to...")
+        .add_filter("", &["amcx"])
+        .set_can_create_directories(true)
+        .save_file()
+        .map(|opt| opt.map(|fh| fh.path().to_path_buf()))
+}
+
+fn write_file<'a>(
+    path: &'a Path,
+    content: &'a str,
+) -> impl Future<Output = std::io::Result<()>> + use<'a> {
+    tokio::fs::write(path, content)
 }
