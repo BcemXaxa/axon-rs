@@ -4,6 +4,9 @@ version = "0.1.0"
 edition.workspace = true
 
 [dependencies]
+amcx_core.workspace = true
+amcx_parser.workspace = true
+
 gltf = "1.4.1"
 iced = { version = "0.13.1", features = ["advanced", "tokio"] }
 iced_aw = "0.12.2"
@@ -13,7 +16,7 @@ rfd = "0.15.3"
 tokio = { version = "1.45.1", features = ["fs"] }
 
 [workspace]
-package.edition = "2021"
+package.edition = "2024"
 members = ["amcx_convert", "amcx_core", "amcx_parser"]
 
 [workspace.dependencies]

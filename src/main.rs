@@ -1,19 +1,26 @@
 // #![cfg_attr(all(target_os = "windows", not(test)), windows_subsystem = "windows")]
 // #![allow(unused)]
 
+use core::f64;
 use std::future::Future;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
+use iced::Alignment::Center;
+use iced::Length::{self, Fill, Shrink};
 use iced::alignment::{Horizontal, Vertical};
 use iced::futures::FutureExt;
 use iced::widget::container::bordered_box;
 use iced::widget::text::Wrapping;
-use iced::widget::{button, column, container, row, text, text_editor, Space};
-use iced::Alignment::Center;
-use iced::Length::{self, Fill, Shrink};
-use iced::{application, window, Element, Font, Subscription, Task, Theme};
+use iced::widget::{Space, button, column, container, row, text, text_editor};
+use iced::{Element, Font, Subscription, Task, Theme, application, window};
+
+use amcx_core::*;
+use amcx_parser::parse as amcx_parse;
+use plotters::series::LineSeries;
+use plotters_iced::{Chart, ChartBuilder, ChartWidget, DrawingBackend};
 
 fn main() -> iced::Result {
     application("Axon", State::update, State::view)
@@ -33,7 +40,9 @@ struct State {
     theme: Theme,
     left_tab: LeftTab,
     dialog: bool,
+    changed: bool,
     content: Option<(text_editor::Content, PathBuf)>,
+    parsed: Option<Vec<Series>>,
 }
 impl State {
     fn new() -> (State, Task<Message>) {
@@ -42,6 +51,8 @@ impl State {
             left_tab: LeftTab::Text,
             content: None,
             dialog: false,
+            changed: false,
+            parsed: None,
         };
         (state, Task::none())
     }
@@ -88,13 +99,16 @@ impl View for State {
         let row2 = row![
             row![
                 button("Open..").on_press(Message::DialogOpen),
-                button("Save").on_press_maybe(
+                button("Save").on_press_maybe(if !self.changed {
                     self.content
                         .as_ref()
                         .map(|(_, path)| Message::SaveFile(path.to_owned()))
-                ),
-                button("Save as..")
-                    .on_press_maybe(self.content.is_some().then_some(Message::DialogSave))
+                } else {
+                    None
+                }),
+                button("Save as..").on_press_maybe(
+                    (!self.changed && self.content.is_some()).then_some(Message::DialogSave)
+                )
             ]
             .spacing(10)
             .width(Fill),
@@ -112,24 +126,10 @@ impl View for State {
 // Elements
 impl State {
     fn left(&self) -> impl Into<Element<Message>> {
-        let left_content = if let Some((content, path)) = &self.content {
+        let left_content = if self.content.is_some() {
             match self.left_tab {
-                LeftTab::Text => {
-                    let editor = text_editor(content)
-                        .height(Fill)
-                        .font(Font::MONOSPACE)
-                        .wrapping(Wrapping::None)
-                        .on_action(Message::Edit);
-                    let coords = content.cursor_position();
-                    let status_bar = row![
-                        text(path.to_str().unwrap_or("")).width(Length::Fill),
-                        text(format!("{} : {}", coords.0 + 1, coords.1 + 1))
-                    ]
-                    .height(Length::Fixed(30.0))
-                    .align_y(Vertical::Center);
-                    Element::from(column![editor, status_bar])
-                }
-                LeftTab::Plot => Space::new(Fill, Fill).into(),
+                LeftTab::Text => self.editor().into(),
+                LeftTab::Plot => self.plot().into(),
             }
         } else {
             self.file_select().into()
@@ -137,6 +137,31 @@ impl State {
 
         column![self.left_tabs().into(), left_content]
     }
+
+    fn editor(&self) -> impl Into<Element<Message>> {
+        let (content, path) = self.content.as_ref().unwrap();
+        let editor = text_editor(content)
+            .height(Fill)
+            .font(Font::MONOSPACE)
+            .wrapping(Wrapping::None);
+
+        let editor = if !self.dialog {
+            editor.on_action(Message::Edit)
+        } else {
+            editor
+        };
+
+        let coords = content.cursor_position();
+        let status_bar = row![
+            text(path.to_str().unwrap_or("")).width(Length::Fill),
+            text(format!("{} : {}", coords.0 + 1, coords.1 + 1))
+        ]
+        .height(Length::Fixed(30.0))
+        .align_y(Vertical::Center);
+        Element::from(column![editor, status_bar])
+    }
+
+    fn plot(&self) -> impl Into<Element<Message>> {}
 
     fn left_tabs(&self) -> impl Into<Element<Message>> {
         row![
@@ -201,25 +226,25 @@ impl Update for State {
             M::DialogOpen if !self.dialog => {
                 self.dialog = true;
                 return Task::future(dialog_open()).then(|maybe_path| {
-                    let maybe_open = match maybe_path {
-                        Some(path) => Task::done(Message::OpenFile(path)),
-                        None => Task::none(),
+                    let maybe_open = match dbg!(maybe_path) {
+                        Some(path) => Message::OpenFile(path),
+                        None => Message::None,
                     };
-                    Task::done(Message::DialogOpenClosed).chain(maybe_open) // FIXME for some reason doesn't work
+                    Task::done(Message::DialogOpenClosed).chain(Task::done(maybe_open))
                 });
             }
             M::DialogOpenClosed => {
                 self.dialog = false;
             }
-            M::DialogSave if dbg!(!self.dialog) => {
+            M::DialogSave if !self.dialog => {
                 self.dialog = true;
                 return Task::future(dialog_save()).then(|maybe_path| {
                     dbg!(&maybe_path);
                     let maybe_save = match maybe_path {
-                        Some(path) => Task::done(Message::SaveFile(path)),
-                        None => Task::none(),
+                        Some(path) => Message::SaveFile(path),
+                        None => Message::None,
                     };
-                    Task::done(Message::DialogSaveClosed).chain(maybe_save) // FIXME for some reason doesn't work
+                    Task::done(Message::DialogSaveClosed).chain(Task::done(maybe_save))
                 });
             }
             M::DialogSaveClosed => {
@@ -287,4 +312,68 @@ fn write_file<'a>(
     content: &'a str,
 ) -> impl Future<Output = std::io::Result<()>> + use<'a> {
     tokio::fs::write(path, content)
+}
+
+struct ChartSeries {
+    time_range: (f64, f64),
+    axis_range: (f64, f64),
+    line_x: Vec<(f64, f64)>,
+    line_y: Vec<(f64, f64)>,
+    line_z: Vec<(f64, f64)>,
+}
+impl ChartSeries {
+    fn new(series: &[(Duration, [f64; 3])]) -> Self {
+        let mut ts = Duration::ZERO;
+        let mut line_x = Vec::with_capacity(series.len());
+        let mut line_y = Vec::with_capacity(series.len());
+        let mut line_z = Vec::with_capacity(series.len());
+
+        let mut min = f64::MAX;
+        let mut max = f64::MIN;
+
+        for (dt, [x, y, z]) in series {
+            ts += *dt;
+            let ts = ts.as_secs_f64();
+
+            line_x.push((ts, *x));
+            line_y.push((ts, *y));
+            line_z.push((ts, *z));
+
+            min = min.min(*x).min(*y).min(*z);
+            max = max.max(*x).max(*y).max(*z);
+        }
+
+        Self {
+            line_x,
+            line_y,
+            line_z,
+            time_range: (0.0, ts.as_secs_f64()),
+            axis_range: (min, max),
+        }
+    }
+    fn view(&self) -> impl Into<Element<Message>> {
+        ChartWidget::new(self).height(Fill).width(Fill)
+    }
+}
+impl Chart<Message> for ChartSeries {
+    type State = ();
+
+    // TODO handle errors
+    fn build_chart<DB: DrawingBackend>(&self, _state: &Self::State, mut builder: ChartBuilder<DB>) { 
+        use plotters::prelude::*;
+
+        let x_spec = self.time_range.0..self.time_range.1;
+        let y_spec = self.axis_range.0..self.axis_range.1;
+        let mut chart = builder
+            .build_cartesian_2d(x_spec, y_spec)
+            .expect("failed to build chart");
+
+        let line_x = LineSeries::new(self.line_x.iter().cloned(), plotters::style::RED);
+        let line_y = LineSeries::new(self.line_y.iter().cloned(), plotters::style::GREEN);
+        let line_z = LineSeries::new(self.line_z.iter().cloned(), plotters::style::BLUE);
+
+        chart.draw_series(line_x).expect("failed to draw series");
+        chart.draw_series(line_y).expect("failed to draw series");
+        chart.draw_series(line_z).expect("failed to draw series");
+    }
 }
