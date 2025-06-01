@@ -258,7 +258,7 @@ fn parse_sample<'a>(
     }
 
     let mut source = source[1..source.len() - 1].split_whitespace();
-    let fs = (1 >> config.bits) as f64;
+    let fs = (1u64 << config.bits) as f64;
     const G: f64 = 9.80665;
 
     let mut acc = [0.0; 3];
