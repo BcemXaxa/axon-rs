@@ -2,43 +2,37 @@
 // #![allow(unused)]
 
 use core::f64;
-use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
 use std::future::Future;
-use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use amcx_parser::parsing_error::ParsingError;
 use iced::Alignment::Center;
 use iced::Length::{self, Fill, Shrink};
 use iced::advanced::graphics::image::image_rs::ImageFormat;
 use iced::alignment::{Horizontal, Vertical};
 use iced::futures::FutureExt;
-use iced::futures::channel::mpsc::{Sender, channel};
 use iced::widget::container::bordered_box;
 use iced::widget::shader::wgpu::naga::FastHashMap;
 use iced::widget::text::Wrapping;
-use iced::widget::{
-    self, Space, button, column, combo_box, container, pick_list, row, text, text_editor,
-};
-use iced::window::Icon;
+use iced::widget::{Space, button, column, container, pick_list, row, text, text_editor};
 use iced::{Border, Element, Font, Shadow, Subscription, Task, Theme, application, color, window};
 
 use amcx_core::*;
 use amcx_parser::parse as amcx_parse;
-use plotters::series::LineSeries;
 use plotters_iced::{Chart, ChartBuilder, ChartWidget, DrawingBackend};
 
 fn main() -> iced::Result {
     application("Axon", State::update, State::view)
         .antialiasing(true)
         .window(window::Settings {
-            icon: Some(iced::window::icon::from_file_data(
-                include_bytes!("./assets/icon.png"),
-                Some(ImageFormat::Png),
-            ).unwrap()),
+            icon: Some(
+                iced::window::icon::from_file_data(
+                    include_bytes!("./assets/icon.png"),
+                    Some(ImageFormat::Png),
+                )
+                .unwrap(),
+            ),
             ..Default::default()
         })
         .window_size([1600.0, 900.0])
@@ -64,6 +58,12 @@ struct State {
 }
 impl State {
     fn new() -> (State, Task<Message>) {
+        let task = iced::font::load(include_bytes!("./assets/icons.ttf")).map(|res| {
+            match res {
+                Ok(_) => Message::None,
+                Err(_err) => Message::None, // TODO handle error
+            }
+        });
         let state = State {
             theme: Theme::Nord,
             left_tab: LeftTab::Text,
@@ -74,7 +74,7 @@ impl State {
             charts: None,
             selected_ref: None,
         };
-        (state, Task::none())
+        (state, task)
     }
     fn theme(state: &State) -> Theme {
         state.theme.clone()
@@ -118,7 +118,7 @@ impl View for State {
         .spacing(10);
         let row2 = row![
             self.left_open_save().into(),
-            container(button("Convert"))
+            container(button(row!["Convert ", Icon::Forward.as_text()]))
                 .align_x(Horizontal::Center)
                 .width(Fill),
             container(button("Save"))
@@ -145,12 +145,12 @@ impl State {
     }
 
     fn left_open_save(&self) -> impl Into<Element<Message>> {
-        let open = button("Open..").on_press_maybe({
+        let open = button(Icon::Open.as_text()).on_press_maybe({
             let if_active = !self.dialog;
             if_active.then_some(Message::DialogOpen)
         });
 
-        let save = button("Save").on_press_maybe({
+        let save = button(Icon::Save.as_text()).on_press_maybe({
             let msg = self
                 .content
                 .as_ref()
@@ -248,6 +248,10 @@ impl State {
         .spacing(10);
 
         container(file_select).center(Fill).style(bordered_box)
+    }
+
+    fn error_log(&self) -> impl Into<Element<Message>> {
+        iced::widget::scrollable(content);
     }
 
     fn gltf_preview(&self) -> impl Into<Element<Message>> {
@@ -522,5 +526,28 @@ impl Chart<Message> for ChartSeries {
         chart.draw_series(line_x).expect("failed to draw series");
         chart.draw_series(line_y).expect("failed to draw series");
         chart.draw_series(line_z).expect("failed to draw series");
+    }
+}
+
+enum Icon {
+    Open,
+    Save,
+    Error,
+    Forward,
+}
+
+impl Icon {
+    const FONT: Font = Font::with_name("icons");
+    fn as_text<'a>(self) -> iced::widget::Text<'a> {
+        let code = match self {
+            Icon::Open => '\u{E802}',
+            Icon::Save => '\u{E803}',
+            Icon::Error => '\u{E800}',
+            Icon::Forward => '\u{E801}',
+        };
+        Icon::from_code(code)
+    }
+    fn from_code<'a>(code: char) -> iced::widget::Text<'a> {
+        text(code).font(Icon::FONT)
     }
 }
