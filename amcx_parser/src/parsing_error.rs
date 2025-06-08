@@ -1,14 +1,14 @@
 use std::{fmt::Display, num::ParseIntError};
 
+use amcx_core::raw::ConfigKey;
 use thiserror::Error;
 
-
 #[derive(Error, Debug)]
-pub struct ParsingError<'a> {
+pub struct ParsingError {
     line: Option<usize>,
-    inner: InnerParsingError<'a>,
+    inner: InnerParsingError,
 }
-impl<'a> Display for ParsingError<'a> {
+impl Display for ParsingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(line) = &self.line {
             write!(f, "Line {line}: ")?
@@ -19,41 +19,38 @@ impl<'a> Display for ParsingError<'a> {
 }
 
 #[derive(Error, Debug)]
-pub enum InnerParsingError<'a> {
+pub enum InnerParsingError {
     #[error("expected {0}, but found nothing")]
-    TokenExpected(&'static str),
+    TokenExpected(String),
     #[error("expected {expected}, but found {found}")]
-    TokenUnexpected {
-        expected: &'static str,
-        found: &'a str,
-    },
+    TokenUnexpected { expected: String, found: String },
     #[error("duplicate references are not allowed: {0}")]
-    ReferenceDuplicate(String),
+    SensorNameDuplicate(String),
     #[error("duplicate configs are not allowed: {0}")]
     ConfigDuplicate(&'static str),
     #[error("missing required config: {0}")]
     ConfigMissing(&'static str),
-    #[error("unknown config key: {0}")]
-    ConfigUnknownKey(&'a str),
-    #[error("unsupported value {value} for key {key}, valid values are: {valid_values}")]
+    #[error("unknown config key: {0}, valid keys are: {keys:?}", keys = ConfigKey::ALL_KEYS)]
+    ConfigUnknownKey(String),
+    #[error("unsupported value {value} for key {key}, valid values are: {valid_values:?}")]
     ConfigUnsupportedValue {
-        value: &'a str,
-        key: &'a str,
-        valid_values: &'static str,
+        value: String,
+        key: String,
+        valid_values: Vec<&'static str>,
     },
     #[error(transparent)]
     NumberParsing(#[from] ParseIntError),
 }
-impl<'a> InnerParsingError<'a> {
-    pub fn at(self, line: usize) -> ParsingError<'a> {
+impl InnerParsingError {
+    pub fn at(self, line: usize) -> ParsingError {
         ParsingError {
             line: Some(line),
             inner: self,
         }
     }
 }
-impl<'a> Into<ParsingError<'a>> for InnerParsingError<'a> {
-    fn into(self) -> ParsingError<'a> {
+impl Into<ParsingError> for InnerParsingError {
+    fn into(self) -> ParsingError {
         ParsingError {
             line: None,
             inner: self,
