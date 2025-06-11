@@ -54,20 +54,41 @@
     },
     {
       "bufferView": 7,
-      "count": 300,
+      "count": 397,
       "componentType": 5126,
       "type": "SCALAR",
       "min": [
-        0.009999999776482582
+        0.0
       ],
       "max": [
-        3.0
+        19.968000411987305
       ]
     },
     {
       "bufferView": 8,
       "byteOffset": 0,
-      "count": 300,
+      "count": 397,
+      "componentType": 5126,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 8,
+      "byteOffset": 6352,
+      "count": 397,
+      "componentType": 5126,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 8,
+      "byteOffset": 12704,
+      "count": 397,
+      "componentType": 5126,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 8,
+      "byteOffset": 19056,
+      "count": 397,
       "componentType": 5126,
       "type": "VEC4"
     }
@@ -78,7 +99,28 @@
         {
           "sampler": 0,
           "target": {
-            "node": 2,
+            "node": 4,
+            "path": "rotation"
+          }
+        },
+        {
+          "sampler": 1,
+          "target": {
+            "node": 6,
+            "path": "rotation"
+          }
+        },
+        {
+          "sampler": 2,
+          "target": {
+            "node": 5,
+            "path": "rotation"
+          }
+        },
+        {
+          "sampler": 3,
+          "target": {
+            "node": 7,
             "path": "rotation"
           }
         }
@@ -88,6 +130,21 @@
           "input": 7,
           "interpolation": "LINEAR",
           "output": 8
+        },
+        {
+          "input": 7,
+          "interpolation": "LINEAR",
+          "output": 9
+        },
+        {
+          "input": 7,
+          "interpolation": "LINEAR",
+          "output": 10
+        },
+        {
+          "input": 7,
+          "interpolation": "LINEAR",
+          "output": 11
         }
       ]
     }
@@ -101,7 +158,7 @@
       "uri": "HumanBody.bin"
     },
     {
-      "byteLength": 6000,
+      "byteLength": 26996,
       "uri": "HumanAnim.bin"
     }
   ],
@@ -149,13 +206,13 @@
     },
     {
       "buffer": 1,
-      "byteLength": 1200,
+      "byteLength": 1588,
       "name": "timestamps"
     },
     {
       "buffer": 1,
-      "byteLength": 4800,
-      "byteOffset": 1200,
+      "byteLength": 25408,
+      "byteOffset": 1588,
       "name": "rotations"
     }
   ],
@@ -221,7 +278,7 @@
       ]
     },
     {
-      "name": "Hand_Lower_L",
+      "name": "Arm_Lower_L",
       "rotation": [
         0.0007359108,
         -1.1920926e-7,
@@ -238,7 +295,7 @@
       "children": [
         4
       ],
-      "name": "Hand_Upper_L",
+      "name": "Arm_Upper_L",
       "rotation": [
         -0.7072615,
         5.1545315e-19,
@@ -257,7 +314,7 @@
       ]
     },
     {
-      "name": "Hand_Lower_R",
+      "name": "Arm_Lower_R",
       "rotation": [
         -1.1989315e-10,
         2.3841848e-7,
@@ -274,7 +331,7 @@
       "children": [
         6
       ],
-      "name": "Hand_Upper_R",
+      "name": "Arm_Upper_R",
       "rotation": [
         0.4998906,
         0.5001094,

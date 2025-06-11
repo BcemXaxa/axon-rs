@@ -11,14 +11,10 @@ use byteorder::{LittleEndian, WriteBytesExt};
 use gltf::{
     animation::{Interpolation, Property},
     json::{
-        Accessor, Animation, Buffer, Index, Root, Value,
-        accessor::{ComponentType, GenericComponentType},
-        animation::{Channel, Sampler, Target},
-        buffer::{self, View},
-        validation::Checked,
+        accessor::{ComponentType, GenericComponentType}, animation::{Channel, Sampler, Target}, buffer::{self, View}, scene, validation::Checked, Accessor, Animation, Buffer, Index, Root, Value
     },
 };
-use nalgebra::{Quaternion, Vector3};
+use nalgebra::{Quaternion, Unit, UnitQuaternion, Vector3};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -152,15 +148,22 @@ pub fn convert(
     let mut outputs = Vec::new();
     for (index, stream) in map {
         let begin = buf.len() - view_begin;
-        let mut ahrs: ahrs::Madgwick<f64> = ahrs::Madgwick::new(0.01, 0.1);
+        let initial_rotation = match gltf_model.get(index.clone()).unwrap().rotation.as_ref() {
+            Some(scene::UnitQuaternion([x, y, z, w])) => {
+                UnitQuaternion::new_unchecked(Quaternion::from([*x as f64, *y as f64, *z as f64, *w as f64]))
+            },
+            None => UnitQuaternion::identity(),
+        } ;
+        //let initial_quaternion = 
+        let mut ahrs: ahrs::Madgwick<f64> = ahrs::Madgwick::new_with_quat(0.01, 0.1, initial_rotation);
         for record in stream {
             let gyro = Vector3::from_iterator(record.sample.gyr.iter().map(|f| *f as f64));
             let accel = Vector3::from_iterator(record.sample.acc.iter().map(|f| *f as f64));
             let q_ahrs = ahrs.update_imu(&gyro, &accel).unwrap().quaternion();
 
-            let q_rot = Quaternion::new(0.7071, 0.7071, 0.0, 0.0); // 90° X-rotation
+            //let q_rot = Quaternion::new(0.7071, 0.7071, 0.0, 0.0); // 90° X-rotation
             // Compose rotations: gltf = adjustment * ahrs
-            let q_gltf = q_rot * q_ahrs;
+            let q_gltf = /*q_rot */ q_ahrs;
             // Then: Reorder components to [x, y, z, w]
             [q_gltf.i, q_gltf.j, q_gltf.k, q_gltf.w]
                 .iter()

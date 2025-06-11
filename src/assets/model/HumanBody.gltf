@@ -55,7 +55,7 @@
 			]
 		},
 		{
-			"name":"Hand_Lower_L",
+			"name":"Arm_Lower_L",
 			"rotation":[
 				0.0007359107839874923,
 				-1.1920926112907182e-07,
@@ -72,7 +72,7 @@
 			"children":[
 				4
 			],
-			"name":"Hand_Upper_L",
+			"name":"Arm_Upper_L",
 			"rotation":[
 				-0.7072615027427673,
 				5.154531526166267e-19,
@@ -91,7 +91,7 @@
 			]
 		},
 		{
-			"name":"Hand_Lower_R",
+			"name":"Arm_Lower_R",
 			"rotation":[
 				-1.1989315096272435e-10,
 				2.384184796255795e-07,
@@ -108,7 +108,7 @@
 			"children":[
 				6
 			],
-			"name":"Hand_Upper_R",
+			"name":"Arm_Upper_R",
 			"rotation":[
 				0.49989059567451477,
 				0.5001093745231628,
