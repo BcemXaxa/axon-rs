@@ -1,5 +1,5 @@
 ?[ BITS=16 ACCEL_SR=4 GYRO_SR=250 CLOCK=milli ]
-&[ Sensor_1 ]
+&[ Chest ]
 
 10
 [16716 -324 -1644 -9 249 70]

@@ -1,3 +1,4 @@
+use amcx_convert::to_gltf::{ConvertingError, Instruction};
 use amcx_parser::{parse as amcx_parse, parsing_error::ParsingError};
 use std::{
     path::{Path, PathBuf},
@@ -15,6 +16,7 @@ pub enum Message {
 
     File(FileMessage),
     Plot(PlottingMessage),
+    Converting(ConvertingMessage),
     OpenTab(TabBar),
     OpenWeb(String),
 
@@ -65,6 +67,16 @@ impl Into<Message> for PlottingMessage {
 }
 
 #[derive(Debug, Clone)]
+pub enum ConvertingMessage {
+    Convert,
+}
+impl Into<Message> for ConvertingMessage {
+    fn into(self) -> Message {
+        Message::Converting(self)
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum ErrorMessage {
     Expand,
     Clear,
@@ -105,6 +117,7 @@ impl State {
             },
             Message::File(message) => self.file_message(message),
             Message::Plot(message) => self.plotting_message(message),
+            Message::Converting(message) => self.converting_message(message),
             Message::Error(message) => self.error_message(message),
             _ => Task::none(),
         }
@@ -178,9 +191,9 @@ impl State {
         }
     }
 
-    fn plotting_message(&mut self, msg: PlottingMessage) -> Task<Message> {
+    fn plotting_message(&mut self, message: PlottingMessage) -> Task<Message> {
         use PlottingMessage as Plot;
-        match msg {
+        match message {
             Plot::Sensor(sensor) => {
                 let selected = &mut self.charts.as_mut().unwrap().selected;
                 *selected = Some(sensor);
@@ -190,6 +203,16 @@ impl State {
                 self.selector_visible = !self.selector_visible;
                 Task::none()
             }
+        }
+    }
+
+    fn converting_message(&mut self, message: ConvertingMessage) -> Task<Message> {
+        use ConvertingMessage as Converting;
+        match message {
+            Converting::Convert => match self.convert() {
+                Err(err) => ErrorMessage::Occured(Arc::new(err)).task(),
+                Ok(_) => Task::none(),
+            },
         }
     }
 
@@ -260,6 +283,24 @@ impl State {
             }
             TabBar::Converter => (), // TODO make converting logic
         }
+        Ok(())
+    }
+
+    fn convert(&self) -> Result<(), ConvertingError> {
+        let gltf_model =
+            gltf::json::Root::from_str(include_str!("../assets/model/HumanBody.gltf")).unwrap();
+
+        let save_path = PathBuf::from("./model_output");
+        let instruction = Instruction {
+            animation_name: None,
+            skin_name: None,
+            mapping: None,
+            save_path: save_path.as_path(),
+            gltf_save_name: "HumanModel.gltf".into(),
+            bin_save_name: "HumanAnim.bin".into(),
+        };
+
+        amcx_convert::to_gltf::convert(gltf_model, self.model.as_ref().unwrap(), instruction)?;
         Ok(())
     }
 }

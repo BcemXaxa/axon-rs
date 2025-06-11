@@ -181,7 +181,10 @@ impl State {
             .into()
     }
     fn converting_actions(&self) -> Element<Message> {
-        Space::new(Fill, Fill).into()
+        button("Convert").on_press_maybe({
+            let if_active = self.model.is_some();
+            if_active.then_some(ConvertingMessage::Convert.into())
+        }).into()
     }
     fn editor(&self) -> Element<Message> {
         let File { path, content, .. } = self.file.as_ref().unwrap();
