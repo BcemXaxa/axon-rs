@@ -45,12 +45,11 @@ fn resolve_sample(sample: amcx_core::raw::Sample, config: &Config) -> Sample {
         *prx = raw as f32 / invert_lsb;
     }
 
-    const G: f32 = 9.80665;
     for a in &mut acc {
-        *a *= config.accel_sr.total_scale() * G;
+        *a *= config.accel_sr.total_scale_g();
     }
     for g in &mut gyr {
-        *g *= config.gyro_sr.total_scale();
+        *g *= config.gyro_sr.total_scale_rad();
     }
 
     Sample { acc, gyr }

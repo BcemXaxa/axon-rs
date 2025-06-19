@@ -6,6 +6,8 @@ use std::{
 
 use iced::{Task, widget::text_editor};
 
+use crate::default_models::DefaultModels;
+
 use super::*;
 
 #[derive(Debug, Clone)]
@@ -15,6 +17,7 @@ pub enum Message {
 
     File(FileMessage),
     Plot(PlottingMessage),
+    Converting(ConvertingMessage),
     OpenTab(TabBar),
     OpenWeb(String),
 
@@ -65,6 +68,19 @@ impl Into<Message> for PlottingMessage {
 }
 
 #[derive(Debug, Clone)]
+pub enum ConvertingMessage {
+    Convert,
+    Dialog,
+    Save(PathBuf),
+    ModelSelected(DefaultModels),
+}
+impl Into<Message> for ConvertingMessage {
+    fn into(self) -> Message {
+        Message::Converting(self)
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum ErrorMessage {
     Expand,
     Clear,
@@ -105,6 +121,7 @@ impl State {
             },
             Message::File(message) => self.file_message(message),
             Message::Plot(message) => self.plotting_message(message),
+            Message::Converting(message) => self.converting_message(message),
             Message::Error(message) => self.error_message(message),
             _ => Task::none(),
         }
@@ -178,9 +195,9 @@ impl State {
         }
     }
 
-    fn plotting_message(&mut self, msg: PlottingMessage) -> Task<Message> {
+    fn plotting_message(&mut self, message: PlottingMessage) -> Task<Message> {
         use PlottingMessage as Plot;
-        match msg {
+        match message {
             Plot::Sensor(sensor) => {
                 let selected = &mut self.charts.as_mut().unwrap().selected;
                 *selected = Some(sensor);
@@ -190,6 +207,28 @@ impl State {
                 self.selector_visible = !self.selector_visible;
                 Task::none()
             }
+        }
+    }
+
+    fn converting_message(&mut self, message: ConvertingMessage) -> Task<Message> {
+        use ConvertingMessage as Converting;
+        match message {
+            Converting::Convert => self.convert(),
+            Converting::Dialog => {
+                Task::future(convert_dialog()).and_then(|path| Converting::Save(path).task())
+            }
+            Converting::Save(path) if self.converted.is_some() => {
+                match self.converted.as_ref().unwrap().modified.write_to(&path) {
+                    Err(err) => ErrorMessage::Occured(Arc::new(err)).task(),
+                    Ok(_) => Task::none(),
+                }
+            }
+            Converting::ModelSelected(model) => {
+                self.anim_model = model.get();
+                self.chosen_model = model;
+                Task::none()
+            }
+            _ => Task::none(),
         }
     }
 
@@ -246,6 +285,7 @@ impl State {
         // invalidate previous state
         self.model = None;
         self.charts = None;
+        self.converted = None;
 
         self.validate_tab_content()?;
 
@@ -258,9 +298,37 @@ impl State {
             TabBar::Plotter => {
                 self.build_charts()?;
             }
-            TabBar::Converter => (), // TODO make converting logic
+            TabBar::Converter => {
+                self.build_model()?;
+            }
         }
         Ok(())
+    }
+
+    fn convert(&mut self) -> Task<Message> {
+        if self.converted.is_some() {
+            return ConvertingMessage::Dialog.task();
+        }
+        let bin_name = "Animation.bin";
+        match amcx_convert::to_gltf::convert(
+            self.anim_model.gltf.clone(),
+            bin_name,
+            self.model.as_ref().unwrap(),
+        ) {
+            Ok((new_gltf, bin)) => {
+                let mut bins = self.anim_model.bins.clone();
+                bins.push((bin_name.into(), bin));
+                let converted = Converted {
+                    modified: AnimModel {
+                        gltf: new_gltf,
+                        bins,
+                    },
+                };
+                self.converted = Some(converted);
+                ConvertingMessage::Dialog.task()
+            }
+            Err(err) => ErrorMessage::Occured(Arc::new(err)).task(),
+        }
     }
 }
 
@@ -294,4 +362,12 @@ fn write_file<'a>(
     content: &'a str,
 ) -> impl Future<Output = std::io::Result<()>> + use<'a> {
     tokio::fs::write(path, content)
+}
+
+fn convert_dialog() -> impl Future<Output = Option<PathBuf>> {
+    let dialog = rfd::AsyncFileDialog::new();
+    let dialog = dialog
+        .set_title("Select file to save to")
+        .set_can_create_directories(true);
+    async move { dialog.pick_file().await.map(|fh| fh.path().to_path_buf()) }
 }

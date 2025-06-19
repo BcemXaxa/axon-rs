@@ -1,5 +1,5 @@
 ?[ BITS=16 ACCEL_SR=2 GYRO_SR=250 CLOCK=milli ]
-&[ Sensor_1 ]
+&[ Head ]
 
 10
 [-4940 -80 12376 -3758 -6260 -3802]

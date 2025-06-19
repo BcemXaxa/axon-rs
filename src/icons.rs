@@ -42,5 +42,5 @@ impl Icon {
 }
 
 pub fn load() -> Task<Result<(), Error>> {
-    iced::font::load(include_bytes!("./assets/text-icons.ttf"))
+    iced::font::load(include_bytes!("../assets/text-icons.ttf"))
 }

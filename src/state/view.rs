@@ -1,3 +1,4 @@
+use crate::default_models::DefaultModels;
 use crate::icons::Icon;
 
 use super::update::*;
@@ -181,7 +182,12 @@ impl State {
             .into()
     }
     fn converting_actions(&self) -> Element<Message> {
-        Space::new(Fill, Fill).into()
+        button("Convert")
+            .on_press_maybe({
+                let if_active = self.model.is_some();
+                if_active.then_some(ConvertingMessage::Convert.into())
+            })
+            .into()
     }
     fn editor(&self) -> Element<Message> {
         let File { path, content, .. } = self.file.as_ref().unwrap();
@@ -238,9 +244,100 @@ impl State {
     }
 
     fn converter(&self) -> Element<Message> {
-        container(self.nothing_to_display())
-            .style(bordered_box)
-            .into()
+        let joints: Vec<_> = self
+            .anim_model
+            .gltf
+            .skins
+            .iter()
+            .next()
+            .unwrap()
+            .joints
+            .iter()
+            .cloned()
+            .filter_map(|joint_idx| {
+                self.anim_model
+                    .gltf
+                    .get(joint_idx)
+                    .unwrap()
+                    .name
+                    .as_ref()
+                    .cloned()
+            })
+            .collect();
+        let sensors: Vec<_> = self
+            .model
+            .as_ref()
+            .map(|model| {
+                model
+                    .into_iter()
+                    .map(|(sensor, _)| sensor.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let sensors_view = sensors.iter().cloned().map(|sensor| {
+            let coupled = joints.contains(&sensor);
+            container(text(sensor))
+                .center(Fill)
+                .style(move |theme| {
+                    let mut default_style = bordered_box(theme);
+                    let palette = theme.palette();
+                    default_style.text_color = Some(Color::BLACK);
+                    if coupled {
+                        default_style.background(palette.success)
+                    } else {
+                        default_style.background(palette.danger)
+                    }
+                })
+                .into()
+        });
+        let joints_view = joints.iter().cloned().map(|joint| {
+            let coupled = sensors.contains(&joint);
+            container(text(joint))
+                .center(Fill)
+                .style(move |theme| {
+                    let mut default_style = bordered_box(theme);
+                    let palette = theme.palette();
+                    if coupled {
+                        default_style.text_color = Some(Color::BLACK);
+                        default_style.background(palette.success)
+                    } else {
+                        default_style
+                    }
+                })
+                .into()
+        });
+
+        let left = column(
+            [container(text("Available Sensors").size(20))
+                .padding(20)
+                .center_x(Fill)
+                .into()]
+            .into_iter()
+            .chain(sensors_view),
+        );
+        let right = column(
+            [container(text("Available Joints").size(20))
+                .padding(20)
+                .center_x(Fill)
+                .into()]
+            .into_iter()
+            .chain(joints_view),
+        );
+
+        let model_selector = pick_list(DefaultModels::ALL, Some(self.chosen_model), |s| {
+            ConvertingMessage::ModelSelected(s).into()
+        });
+
+        container(column![
+            row![horizontal_space(), model_selector],
+            row![left.spacing(5), vertical_rule(2), right.spacing(5)].spacing(10)
+        ])
+        .height(Fill)
+        .width(Fill)
+        .style(bordered_box)
+        .padding(10)
+        .into()
     }
 
     fn file_select(&self) -> Element<Message> {

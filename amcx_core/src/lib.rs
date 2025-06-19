@@ -2,19 +2,19 @@ pub use processed::*;
 
 pub mod processed {
     use std::time::Duration;
-    
+
     pub type Model = Vec<(Sensor, Stream)>;
     pub type Sensor = String;
     pub type Stream = Vec<Record>;
-    
+
     #[derive(Debug, Clone)]
     pub struct Sample {
-        // in m/(s^2)
+        // in g
         pub acc: [f32; 3],
-        // in deg/s
+        // in rad/s
         pub gyr: [f32; 3],
     }
-    
+
     #[derive(Debug, Clone)]
     pub struct Record {
         pub timestamp: Duration,
@@ -24,14 +24,14 @@ pub mod processed {
 
 pub mod raw {
     use std::time::Duration;
-    
+
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct File {
         pub config: Config,
         pub sensors: Vec<Sensor>,
         pub clusters: Vec<Cluster>,
     }
-    
+
     pub type Sensor = String;
     pub type Sample = [i32; 6];
 
@@ -71,7 +71,7 @@ pub mod raw {
             })
         }
 
-        pub fn as_u8(&self) -> u8 {
+        pub const fn as_u8(&self) -> u8 {
             match self {
                 Self::_8 => 8,
                 Self::_16 => 16,
@@ -80,6 +80,7 @@ pub mod raw {
         }
     }
 
+    // in g
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub enum AccelSR {
         _2,
@@ -106,7 +107,7 @@ pub mod raw {
             })
         }
 
-        pub fn total_scale(&self) -> f32 {
+        pub const fn total_scale_g(&self) -> f32 {
             match self {
                 Self::_2 => 4.0,
                 Self::_4 => 8.0,
@@ -114,8 +115,14 @@ pub mod raw {
                 Self::_16 => 32.0,
             }
         }
+
+        pub const fn total_scale_m(&self) -> f32 {
+            const G: f32 = 9.80665;
+            self.total_scale_g() * G
+        }
     }
 
+    // in deg/s
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub enum GyroSR {
         _250,
@@ -146,13 +153,17 @@ pub mod raw {
             })
         }
 
-        pub fn total_scale(&self) -> f32 {
+        pub const fn total_scale_deg(&self) -> f32 {
             match self {
                 Self::_250 => 500.0,
                 Self::_500 => 1000.0,
                 Self::_1000 => 2000.0,
                 Self::_2000 => 4000.0,
             }
+        }
+
+        pub const fn total_scale_rad(&self) -> f32 {
+            self.total_scale_deg().to_radians()
         }
     }
 
@@ -168,14 +179,14 @@ pub mod raw {
         pub const ALL_VALUES: [&str; 2] = [Self::VALUE_MILLI, Self::VALUE_MICRO];
 
         pub fn from_str(val: &str) -> Option<Self> {
-            Some(match val {
+            Some(match val.to_ascii_lowercase().as_str() {
                 Self::VALUE_MILLI => Self::Milli,
                 Self::VALUE_MICRO => Self::Micro,
                 _ => return None,
             })
         }
 
-        pub fn duration(&self, val: u32) -> Duration {
+        pub const fn duration(&self, val: u32) -> Duration {
             match self {
                 Self::Milli => Duration::from_millis(val as u64),
                 Self::Micro => Duration::from_micros(val as u64),

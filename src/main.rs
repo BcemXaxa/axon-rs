@@ -1,5 +1,5 @@
-// #![cfg_attr(all(target_os = "windows", not(test)), windows_subsystem = "windows")]
-// #![allow(unused)]
+//#![cfg_attr(all(target_os = "windows", not(test)), windows_subsystem = "windows")]
+//#![allow(unused)]
 
 use std::sync::Arc;
 
@@ -8,6 +8,7 @@ use iced::{Subscription, Task, Theme, application, window};
 
 use crate::state::*;
 
+mod default_models;
 mod icons;
 mod state;
 
@@ -26,7 +27,7 @@ fn main() -> iced::Result {
         .run_with(State::new)
 }
 fn app_icon() -> Result<window::Icon, window::icon::Error> {
-    iced::window::icon::from_file_data(include_bytes!("./assets/icon.png"), Some(ImageFormat::Png))
+    iced::window::icon::from_file_data(include_bytes!("../assets/icon.png"), Some(ImageFormat::Png))
 }
 
 impl State {

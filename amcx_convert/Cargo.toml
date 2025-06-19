@@ -4,5 +4,12 @@ version = "0.1.0"
 edition.workspace = true
 
 [dependencies]
+amcx_core.workspace = true
+gltf.workspace = true
+thiserror.workspace = true
+nalgebra.workspace = true
+
+byteorder = "1.5.0"
+ahrs = "0.7.0"
 
 [features]
