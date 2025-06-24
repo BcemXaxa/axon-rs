@@ -325,12 +325,24 @@ impl State {
             .chain(joints_view),
         );
 
+        let calibration_select_button = button("Select Calibration").on_press_maybe({
+            let if_active = !self.dialog;
+            if_active.then_some(ConvertingMessage::Dialog(ConvertingDialog::Calibration).into())
+        });
+        let calibration_select_status = text({
+            match self.calibration {
+                Some((_, ref path)) => path.file_name().unwrap().to_str().unwrap(),
+                None => "None",
+            }
+        });
+        let calibration_select =
+            row![calibration_select_button, calibration_select_status,].spacing(20);
         let model_selector = pick_list(DefaultModels::ALL, Some(self.chosen_model), |s| {
             ConvertingMessage::ModelSelected(s).into()
         });
 
         container(column![
-            row![horizontal_space(), model_selector],
+            row![calibration_select, horizontal_space(), model_selector],
             row![left.spacing(5), vertical_rule(2), right.spacing(5)].spacing(10)
         ])
         .height(Fill)

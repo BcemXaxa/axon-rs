@@ -146,27 +146,27 @@
     },
     {
       "bufferView": 19,
-      "count": 301,
+      "count": 248,
       "componentType": 5126,
       "type": "SCALAR",
       "min": [
-        0.009999999776482582
+        0.012000000104308128
       ],
       "max": [
-        3.009999990463257
+        4.89900016784668
       ]
     },
     {
       "bufferView": 20,
       "byteOffset": 0,
-      "count": 301,
+      "count": 248,
       "componentType": 5126,
       "type": "VEC4"
     },
     {
       "bufferView": 20,
-      "byteOffset": 4816,
-      "count": 301,
+      "byteOffset": 3968,
+      "count": 248,
       "componentType": 5126,
       "type": "VEC4"
     }
@@ -177,14 +177,14 @@
         {
           "sampler": 0,
           "target": {
-            "node": 0,
+            "node": 1,
             "path": "rotation"
           }
         },
         {
           "sampler": 1,
           "target": {
-            "node": 1,
+            "node": 0,
             "path": "rotation"
           }
         }
@@ -213,7 +213,7 @@
       "uri": "Calibration2.bin"
     },
     {
-      "byteLength": 10836,
+      "byteLength": 8928,
       "uri": "Animation.bin"
     }
   ],
@@ -333,13 +333,13 @@
     },
     {
       "buffer": 1,
-      "byteLength": 1204,
+      "byteLength": 992,
       "name": "timestamps"
     },
     {
       "buffer": 1,
-      "byteLength": 9632,
-      "byteOffset": 1204,
+      "byteLength": 7936,
+      "byteOffset": 992,
       "name": "rotations"
     }
   ],

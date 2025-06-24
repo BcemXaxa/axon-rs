@@ -146,20 +146,20 @@
     },
     {
       "bufferView": 19,
-      "count": 202,
+      "count": 248,
       "componentType": 5126,
       "type": "SCALAR",
       "min": [
-        0.009999999776482582
+        0.012000000104308128
       ],
       "max": [
-        2.0199999809265137
+        4.89900016784668
       ]
     },
     {
       "bufferView": 20,
       "byteOffset": 0,
-      "count": 202,
+      "count": 248,
       "componentType": 5126,
       "type": "VEC4"
     }
@@ -194,7 +194,7 @@
       "uri": "Calibration.bin"
     },
     {
-      "byteLength": 4040,
+      "byteLength": 4960,
       "uri": "Animation.bin"
     }
   ],
@@ -314,13 +314,13 @@
     },
     {
       "buffer": 1,
-      "byteLength": 808,
+      "byteLength": 992,
       "name": "timestamps"
     },
     {
       "buffer": 1,
-      "byteLength": 3232,
-      "byteOffset": 808,
+      "byteLength": 3968,
+      "byteOffset": 992,
       "name": "rotations"
     }
   ],

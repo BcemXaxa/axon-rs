@@ -33,18 +33,8 @@ pub fn convert(
     mut gltf_model: Root,
     bin_name: &str,
     amcx_model: &Model,
+    calibration: Option<&Model>,
 ) -> Result<(Root, Vec<u8>), ConvertingError> {
-    let joints_map: HashMap<Joint, Index<gltf::json::Node>> =
-        HashMap::from_iter(joints_with_names(&gltf_model));
-
-    let mut joint_stream = Vec::new();
-    for (sensor, stream) in amcx_model {
-        let joint_index = joints_map
-            .get(sensor)
-            .ok_or(ConvertingError::SensorNotCoupled(sensor.into()))?;
-        joint_stream.push((joint_index, stream));
-    }
-
     let mut bin = Vec::new();
     let count = amcx_model.first().unwrap().1.len();
 
@@ -105,7 +95,7 @@ pub fn convert(
         extras: Default::default(),
     });
 
-    let rotations = calculate_rotations(amcx_model, &gltf_model)?;
+    let rotations = calculate_rotations(amcx_model, &gltf_model, calibration)?;
     let mut outputs = Vec::new();
     for (index, stream) in rotations {
         if stream.is_empty() {
@@ -183,25 +173,10 @@ pub fn convert(
     Ok((gltf_model, bin))
 }
 
-fn joints_with_names(gltf: &Root) -> impl Iterator<Item = (String, Index<Node>)> {
-    gltf.skins
-        .iter()
-        .next()
-        .unwrap()
-        .joints
-        .iter()
-        .map(|index| {
-            (
-                gltf.get(index.clone()).unwrap().name.clone().unwrap(),
-                index.clone(),
-            )
-        })
-}
-
 fn calculate_rotations(
     model: &Model,
     root: &Root,
-    //calibrators: &[(String, Calibrator)],
+    calibration: Option<&Model>,
 ) -> Result<HashMap<Index<Node>, Vec<UnitQuaternion<f32>>>, ConvertingError> {
     let skin = root.skins.iter().next().unwrap();
     let get_joints: HashMap<&str, Index<Node>> = skin
@@ -213,7 +188,7 @@ fn calculate_rotations(
         })
         .collect();
 
-    let calibrators = Calibrator::new(model)?; // TODO: remove
+    let calibrators = Calibrator::new(calibration.unwrap_or(&Vec::new()))?;
     let mut indexed_calibrators = HashMap::new();
     for (sensor, calibrator) in calibrators {
         let index = get_joints
@@ -232,8 +207,18 @@ fn calculate_rotations(
 
     let sample_count = model[0].1.len();
 
+    let mut static_orientation = HashMap::new();
     let mut joint_rotations = HashMap::new();
     for index in skin.joints.iter().cloned() {
+        match root.get(index).unwrap().rotation {
+            Some(s) => {
+                static_orientation.insert(index, UnitQuaternion::from_quaternion(s.0.into()));
+            }
+            None => {
+                static_orientation.insert(index, UnitQuaternion::identity());
+            }
+        }
+
         let mut rotations = match joints_with_stream.remove(&index) {
             Some(stream) => process_ahrs(stream)?,
             None => vec![UnitQuaternion::identity(); sample_count],
@@ -248,32 +233,27 @@ fn calculate_rotations(
 
     let tree = NodeTree::new(root);
     for tree_root in tree {
-        let mut static_orientation = HashMap::new();
-        tree_root.for_each_df(&mut |node| {
-            let self_orientation = match root.get(node.index).unwrap().rotation.as_ref() {
-                Some(scene::UnitQuaternion(q)) => UnitQuaternion::new_unchecked(q.clone().into()),
-                None => UnitQuaternion::identity(),
-            };
-            for child in &node.children {
-                child.index;
-                let child_orientation = static_orientation.get_mut(&child.index).unwrap();
-                *child_orientation = self_orientation * (*child_orientation);
-            }
-            static_orientation.insert(node.index, self_orientation);
-        });
-
         tree_root.for_each_bf(&mut |node| {
-            let s = static_orientation.get(&node.index).unwrap();
-            let parent_rotations_inv: Vec<_> = joint_rotations
+            let s = static_orientation.get(&node.index).unwrap().clone();
+            for child in &node.children {
+                let child_orientation = static_orientation.get_mut(&child.index).unwrap();
+                *child_orientation = s * (*child_orientation);
+            }
+            joint_rotations
                 .get_mut(&node.index)
                 .unwrap()
                 .iter_mut()
-                .map(|q| {
+                .for_each(|q| {
                     *q = (*q) * s;
-                    q.inverse()
-                })
+                });
+        });
+        tree_root.for_each_df(&mut |node| {
+            let parent_rotations_inv: Vec<_> = joint_rotations
+                .get(&node.index)
+                .unwrap()
+                .into_iter()
+                .map(|q| q.inverse())
                 .collect();
-
             let children = node.children.iter().map(|node| &node.index);
             for child in children {
                 let zip = joint_rotations
@@ -414,7 +394,7 @@ impl Calibrator {
                         .then_some(Vector3::from(r.sample.acc))
                 })
                 .sum();
-            let approx_y = approx_y.normalize();
+            let approx_y = -approx_y.normalize();
             // get rotation -> axis
             let new_z = process_ahrs(stream)?
                 .last()
@@ -427,20 +407,10 @@ impl Calibrator {
             // orthogonalize and normalize
             let new_y = new_z.cross(&new_x).normalize();
 
-            println!("{sensor}:");
-            println!("new x: [{}, {}, {}]", new_x.x, new_x.y, new_x.z);
-            println!("new y: [{}, {}, {}]", new_y.x, new_y.y, new_y.z);
-            println!("new z: [{}, {}, {}]", new_z.x, new_z.y, new_z.z);
-
             // convert to quaternion
             let rotation_matrix =
                 Rotation3::from_matrix(&Matrix3::from_columns(&[new_x, new_y, new_z]));
             let quat = UnitQuaternion::from_rotation_matrix(&rotation_matrix);
-
-            println!(
-                "Q: [{}, {}, {}, {}]",
-                quat.w, quat.coords.x, quat.coords.y, quat.coords.z
-            );
 
             calibrators.insert(
                 sensor.into(),

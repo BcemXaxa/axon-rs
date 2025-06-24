@@ -67,11 +67,19 @@ impl Into<Message> for PlottingMessage {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum ConvertingDialog {
+    Save,
+    Calibration,
+}
+
 #[derive(Debug, Clone)]
 pub enum ConvertingMessage {
     Convert,
-    Dialog,
+    Dialog(ConvertingDialog),
     Save(PathBuf),
+    OpenCalibration(PathBuf),
+    CalibrationOpened(Arc<String>, PathBuf),
     ModelSelected(DefaultModels),
 }
 impl Into<Message> for ConvertingMessage {
@@ -214,9 +222,23 @@ impl State {
         use ConvertingMessage as Converting;
         match message {
             Converting::Convert => self.convert(),
-            Converting::Dialog => {
-                Task::future(convert_dialog()).and_then(|path| Converting::Save(path).task())
+            Converting::Dialog(action) => {
+                self.convert_dialog(action)
+                    .chain(Message::DialogClosed.task()) //.and_then(|path| Converting::Save(path).task())
             }
+            Converting::OpenCalibration(path) => Task::future(async {
+                match read_file(&path).await.map(Arc::new) {
+                    Ok(content) => Converting::CalibrationOpened(content, path).into(),
+                    Err(err) => ErrorMessage::Occured(Arc::new(err)).into(),
+                }
+            }),
+            Converting::CalibrationOpened(content, path) => match amcx_parse(&content) {
+                Ok(model) => {
+                    self.calibration = Some((model, path));
+                    Task::none()
+                }
+                Err(err) => ErrorMessage::Occured(Arc::new(err)).task(),
+            },
             Converting::Save(path) if self.converted.is_some() => {
                 match self.converted.as_ref().unwrap().modified.write_to(&path) {
                     Err(err) => ErrorMessage::Occured(Arc::new(err)).task(),
@@ -260,6 +282,15 @@ impl State {
             Some(path) => match action {
                 Action::Open => FileMessage::Open(path).task(),
                 Action::Save => FileMessage::Save(path).task(),
+            },
+        })
+    }
+    fn convert_dialog(&mut self, action: ConvertingDialog) -> Task<Message> {
+        Task::future(convert_dialog(action)).then(move |opt| match opt {
+            None => Message::None.task(),
+            Some(path) => match action {
+                ConvertingDialog::Calibration => ConvertingMessage::OpenCalibration(path).task(),
+                ConvertingDialog::Save => ConvertingMessage::Save(path).task(),
             },
         })
     }
@@ -307,13 +338,14 @@ impl State {
 
     fn convert(&mut self) -> Task<Message> {
         if self.converted.is_some() {
-            return ConvertingMessage::Dialog.task();
+            return ConvertingMessage::Dialog(ConvertingDialog::Save).task();
         }
         let bin_name = "Animation.bin";
         match amcx_convert::to_gltf::convert(
             self.anim_model.gltf.clone(),
             bin_name,
             self.model.as_ref().unwrap(),
+            self.calibration.as_ref().map(|c| &c.0),
         ) {
             Ok((new_gltf, bin)) => {
                 let mut bins = self.anim_model.bins.clone();
@@ -325,7 +357,7 @@ impl State {
                     },
                 };
                 self.converted = Some(converted);
-                ConvertingMessage::Dialog.task()
+                ConvertingMessage::Dialog(ConvertingDialog::Save).task()
             }
             Err(err) => ErrorMessage::Occured(Arc::new(err)).task(),
         }
@@ -335,12 +367,9 @@ impl State {
 fn dialog(action: Action) -> impl Future<Output = Option<PathBuf>> {
     let mut dialog = rfd::AsyncFileDialog::new();
     dialog = match action {
-        Action::Open => dialog
-            .set_title("Select motion capture data...")
-            .add_filter("", &["amcx"]),
+        Action::Open => dialog.set_title("Select motion capture data..."),
         Action::Save => dialog
             .set_title("Select file to save to...")
-            .add_filter("", &["amcx"])
             .set_can_create_directories(true),
     };
 
@@ -364,10 +393,19 @@ fn write_file<'a>(
     tokio::fs::write(path, content)
 }
 
-fn convert_dialog() -> impl Future<Output = Option<PathBuf>> {
-    let dialog = rfd::AsyncFileDialog::new();
-    let dialog = dialog
-        .set_title("Select file to save to")
-        .set_can_create_directories(true);
-    async move { dialog.pick_file().await.map(|fh| fh.path().to_path_buf()) }
+fn convert_dialog(action: ConvertingDialog) -> impl Future<Output = Option<PathBuf>> {
+    let mut dialog = rfd::AsyncFileDialog::new();
+    dialog = match action {
+        ConvertingDialog::Save => dialog
+            .set_title("Select file to save to")
+            .set_can_create_directories(true),
+        ConvertingDialog::Calibration => dialog.set_title("Select calibration file"),
+    };
+    async move {
+        match action {
+            ConvertingDialog::Save => dialog.save_file().await,
+            ConvertingDialog::Calibration => dialog.pick_file().await,
+        }
+        .map(|fh| fh.path().to_path_buf())
+    }
 }
